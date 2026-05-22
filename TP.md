@@ -2,7 +2,7 @@
 
 Dans une usine, on doit effectuer des tâches (jobs) comportant chacune plusieurs opérations.
 Ces opérations peuvent être effectuées sur un ensemble de machines (spécifique à chaque opération) et leur durée et la quantité d'énergie nécessaire dépend de la machine choisie pour effectuer l'opération.
-On doit effectuer les opérations d'une même tâche l'une après l'autre : l'opération $i$ de la tâche ne peut commencer que si l'opération $i+1$ est terminée.
+On doit effectuer les opérations d'une même tâche l'une après l'autre : l'opération $i$ de la tâche ne peut commencer que si l'opération $i-1$ est terminée.
 Les machines peuvent être allumées ou éteintes.
 Lorsqu'une machine est allumée, elle a besoin d'une quantité importante d'énergie et de temps avant d'être opérationnelle, de même, lorsqu'on l'éteint.
 Si elle reste allumée, mais n'effectue aucune opération, sa consommation est basse.
