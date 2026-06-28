@@ -1,5 +1,5 @@
 '''
-Mother class for heuristics.
+Classe mère pour toutes les heuristiques du TP.
 
 @author: Vassilissa Lehoux
 '''
@@ -11,24 +11,25 @@ from src.scheduling.solution import Solution
 
 class Heuristic(object):
     '''
-    classdocs
+    Classe abstraite dont héritent toutes les heuristiques.
+    Définit l'interface commune : constructeur avec paramètres et
+    méthode run().
     '''
 
-    def __init__(self, params: Dict=dict()):
+    def __init__(self, params: Dict = None):
         '''
-        Constructor
-        @param params: The parameters of your heuristic method if any as a
-               dictionary. Implementation should provide default values in the function.
+        Constructeur.
+        @param params: dictionnaire de paramètres (optionnel). Les sous-classes
+                       doivent définir leurs valeurs par défaut dans run().
         '''
-        raise "Not Implemented Error"
+        self._params = params if params is not None else {}
 
-    def run(self, instance: Instance, params: Dict=dict()) -> Solution:
+    def run(self, instance: Instance, params: Dict = None) -> Solution:
         '''
-        Computes a solution for the given instance.
-        Implementation should provide default values in the function
-        (the function will be evaluated with an empty dictionary).
-        @param instance: the instance to solve
-        @param params: the parameters for the run
+        Calcule une solution pour l'instance donnée.
+        @param instance: instance du problème à résoudre
+        @param params:   paramètres spécifiques à l'exécution (peuvent
+                         surcharger ceux du constructeur)
+        @return:         Solution calculée
         '''
-        raise "Not Implemented Error"
-        
+        raise NotImplementedError("La méthode run() doit être implémentée.")  # pragma: no cover
