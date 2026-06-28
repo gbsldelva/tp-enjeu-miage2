@@ -156,7 +156,7 @@ class TestMachineBranches(unittest.TestCase):
         # stop à l'heure de disponibilité
         m.stop(m.available_time)
         self.assertFalse(m._running, 'La machine doit être éteinte après stop()')
-        self.assertEqual(m.stop_times[0], m.available_time,
+        self.assertEqual(m.stop_times[0], m.available_time + m.tear_down_time,
                          'stop_times doit être mis à jour par stop()')
 
     def test_multi_session(self):
@@ -177,6 +177,27 @@ class TestMachineBranches(unittest.TestCase):
 
         self.assertEqual(len(m.start_times), 2, 'Deux sessions doivent exister')
         self.assertEqual(len(m.stop_times), 2)
+
+    def test_auto_interrupt_on_large_idle_gap(self):
+        '''
+        Une grande plage d'inactivité doit créer automatiquement une nouvelle
+        session au lieu de laisser la machine allumée inutilement.
+        '''
+        m   = Machine(0, 5, 2, 5, 2, 1, 200)
+        op0 = Operation(0, 0)
+        op0.add_machine_option(0, 10, 5)
+        op1 = Operation(1, 1)
+        op1.add_machine_option(0, 10, 5)
+
+        m.add_operation(op0, 0)
+        m.add_operation(op1, 100)
+
+        self.assertEqual(len(m.start_times), 2,
+                         'Une interruption automatique doit créer deux sessions')
+        self.assertEqual(m.stop_times[0], op0.end_time + m.tear_down_time,
+                         'La première session doit se terminer après le teardown')
+        self.assertEqual(m.start_times[1], 95,
+                         'La seconde session doit redémarrer juste à temps')
 
 
 class TestSolutionBranches(unittest.TestCase):

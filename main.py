@@ -16,6 +16,7 @@ Métriques affichées :
   - temps CPU (secondes)
 '''
 import os
+import csv
 import time
 
 from src.scheduling.instance.instance import Instance
@@ -31,8 +32,15 @@ from src.scheduling.optim.local_search import (
 
 NB_RUNS     = 30    # nombre de runs pour les algorithmes non déterministes
 DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'data')
-# Instances à tester (jsp2 à jsp10 pour un benchmark rapide)
-INSTANCES   = [f"jsp{i}" for i in range(2, 11)]
+# Fichier CSV de sortie pour l'analyse comparative des performances
+RESULTS_CSV = os.path.join(os.path.dirname(__file__), 'resultats_benchmark.csv')
+# En-têtes du fichier CSV de résultats
+CSV_HEADER  = [
+    'instance', 'algorithme', 'realisable',
+    'objectif', 'cmax', 'sum_ci', 'energie', 'cpu_s'
+]
+# Instances à tester (jsp2 à jsp51 pour un benchmark complet)
+INSTANCES   = [f"jsp{i}" for i in range(2, 52)]
 
 
 def run_once(AlgoClass, instance, params=None):
@@ -73,6 +81,22 @@ def afficher_ligne(instance_name, algo_name, sol, temps):
     )
 
 
+def ligne_csv(instance_name, algo_name, sol, temps):
+    '''
+    Construit la ligne de résultats destinée au CSV.
+    Les solutions non réalisables sont marquées comme telles, leurs
+    métriques restant exportées lorsqu'elles sont disponibles.
+    '''
+    realisable = bool(sol is not None and sol.is_feasible)
+    if sol is None:
+        return [instance_name, algo_name, realisable, '', '', '', '', f"{temps:.3f}"]
+    return [
+        instance_name, algo_name, realisable,
+        f"{sol.objective:.1f}", sol.cmax, sol.sum_ci,
+        f"{sol.total_energy_consumption:.1f}", f"{temps:.3f}"
+    ]
+
+
 def main():
     print("=" * 105)
     print("  COMPARAISON DES ALGORITHMES — TP ORDONNANCEMENT À CONTRAINTES ÉNERGÉTIQUES")
@@ -81,28 +105,39 @@ def main():
           f"{'Cmax':>7} | {'ΣCi':>8} | {'Energie':>10} | {'CPU':>8}")
     print("-" * 105)
 
-    for inst_name in INSTANCES:
-        inst_folder = os.path.join(DATA_FOLDER, inst_name)
-        if not os.path.isdir(inst_folder):
-            continue
+    # Ouverture du CSV : écriture au fil de l'eau pour conserver les
+    # résultats même si le benchmark est interrompu.
+    with open(RESULTS_CSV, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(CSV_HEADER)
 
-        instance = Instance.from_file(inst_folder)
+        for inst_name in INSTANCES:
+            inst_folder = os.path.join(DATA_FOLDER, inst_name)
+            if not os.path.isdir(inst_folder):
+                continue
 
-        sol_g,  t_g  = run_once(Greedy, instance)
-        afficher_ligne(inst_name, "Greedy", sol_g, t_g)
+            instance = Instance.from_file(inst_folder)
 
-        sol_nd, t_nd = meilleur_sur_n_runs(NonDeterminist, instance)
-        afficher_ligne(inst_name, f"NonDeterminist (×{NB_RUNS})", sol_nd, t_nd)
+            sol_g,  t_g  = run_once(Greedy, instance)
+            afficher_ligne(inst_name, "Greedy", sol_g, t_g)
+            writer.writerow(ligne_csv(inst_name, "Greedy", sol_g, t_g))
 
-        sol_fn, t_fn = meilleur_sur_n_runs(FirstNeighborLocalSearch, instance)
-        afficher_ligne(inst_name, f"FirstNeighborLS (×{NB_RUNS})", sol_fn, t_fn)
+            sol_nd, t_nd = meilleur_sur_n_runs(NonDeterminist, instance)
+            afficher_ligne(inst_name, f"NonDeterminist (×{NB_RUNS})", sol_nd, t_nd)
+            writer.writerow(ligne_csv(inst_name, "NonDeterminist", sol_nd, t_nd))
 
-        sol_bn, t_bn = meilleur_sur_n_runs(BestNeighborLocalSearch, instance)
-        afficher_ligne(inst_name, f"BestNeighborLS (×{NB_RUNS})", sol_bn, t_bn)
+            sol_fn, t_fn = meilleur_sur_n_runs(FirstNeighborLocalSearch, instance)
+            afficher_ligne(inst_name, f"FirstNeighborLS (×{NB_RUNS})", sol_fn, t_fn)
+            writer.writerow(ligne_csv(inst_name, "FirstNeighborLS", sol_fn, t_fn))
 
-        print("-" * 105)
+            sol_bn, t_bn = meilleur_sur_n_runs(BestNeighborLocalSearch, instance)
+            afficher_ligne(inst_name, f"BestNeighborLS (×{NB_RUNS})", sol_bn, t_bn)
+            writer.writerow(ligne_csv(inst_name, "BestNeighborLS", sol_bn, t_bn))
 
-    print("Benchmark terminé.")
+            f.flush()
+            print("-" * 105)
+
+    print(f"Benchmark terminé. Résultats exportés dans {RESULTS_CSV}")
 
 
 if __name__ == "__main__":

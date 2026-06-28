@@ -24,13 +24,7 @@ def _estimated_start(op: Operation, machine: Machine) -> int:
     Reproduit la logique de Machine.add_operation().
     '''
     min_start = op.min_start_time
-    if not machine._running:
-        machine_start = max(0, min_start - machine.set_up_time)
-        actual_start  = machine_start + machine.set_up_time
-        actual_start  = max(actual_start, min_start)
-    else:
-        actual_start = max(min_start, machine.available_time)
-    return actual_start
+    return machine.estimate_start_time(min_start)
 
 
 def _build_candidates(available_ops, instance: Instance) -> List[Tuple]:
@@ -64,7 +58,7 @@ class Greedy(Heuristic):
     En cas d'égalité on départage par (job_id, operation_id) pour
     garantir la reproductibilité.
 
-    Complexité : O(N² × M) avec N = nb opérations, M = nb machines.
+    Complexité : O(N² x M) avec N = nb opérations, M = nb machines.
     '''
 
     def __init__(self, params: Dict = None):
@@ -100,6 +94,10 @@ class Greedy(Heuristic):
             op, machine_id, _, _, _ = meilleur
             sol.schedule(op, instance.get_machine(machine_id))
 
+        # Éteindre les machines au plus tôt puis figer la solution
+        # (la rend indépendante de l'état partagé de l'instance).
+        sol.close_machines()
+        sol.freeze()
         return sol
 
 
@@ -161,6 +159,9 @@ class NonDeterminist(Heuristic):
             op, machine_id, _, _, _ = random.choice(top_k)
             sol.schedule(op, instance.get_machine(machine_id))
 
+        # Éteindre les machines au plus tôt puis figer la solution.
+        sol.close_machines()
+        sol.freeze()
         return sol
 
 

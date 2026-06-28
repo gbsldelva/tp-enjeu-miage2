@@ -135,6 +135,21 @@ class TestMachine(unittest.TestCase):
         self.assertEqual(self.m1.available_time, 0,
                          'reset doit remettre available_time à 0')
 
+    def testAutomaticInterruption(self):
+        '''
+        Vérifie qu'une nouvelle session est créée automatiquement lorsqu'il
+        existe un grand trou entre deux opérations.
+        '''
+        self.m1.add_operation(self.op0, 0)
+        self.m1.add_operation(self.op2, 100)
+
+        self.assertEqual(len(self.m1.start_times), 2,
+                         'un grand trou doit provoquer une interruption automatique')
+        self.assertEqual(self.m1.stop_times[0], self.op0.end_time + self.m1.tear_down_time,
+                         'la première session doit inclure son teardown')
+        self.assertEqual(self.m1.start_times[1], 80,
+                         'la seconde session doit démarrer juste avant l opération')
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -50,13 +50,10 @@ class Neighborhood(object):
         '''
         Extrait la séquence de décisions de la solution sous la forme
         d'une liste de (operation_id, machine_id) triée par heure de début.
-        Cette séquence permet de rejouer la solution de façon identique.
+        S'appuie sur le snapshot de la solution (indépendant de l'état
+        courant de l'instance) si elle est figée.
         '''
-        ops_sorted = sorted(
-            [op for op in sol.all_operations if op.assigned],
-            key=lambda op: op.start_time
-        )
-        return [(op.operation_id, op.assigned_to) for op in ops_sorted]
+        return sol.schedule_sequence
 
     def _rebuild_from_sequence(self, sequence: List[Tuple[int, int]]) -> Solution:
         '''
@@ -64,31 +61,14 @@ class Neighborhood(object):
         de la séquence donnée, tout en respectant les contraintes de précédence
         (une opération ne peut être planifiée que si ses prédécesseurs le sont).
 
-        Stratégie : à chaque étape, parmi les opérations disponibles, on choisit
-        celle qui apparaît en premier dans la séquence (d'après son rang).
-        Cela garantit que toutes les opérations sont bien planifiées même si
-        l'échange a inversé l'ordre naturel.
+        La solution reconstruite est fermée (machines éteintes au plus tôt)
+        puis figée, ce qui la rend indépendante de l'état partagé de l'instance.
 
         @param sequence: liste de (operation_id, machine_id)
-        @return:         nouvelle Solution complète
+        @return:         nouvelle Solution complète et figée
         '''
         new_sol = Solution(self._instance)
-        new_sol.reset()
-
-        # Rang dans la séquence et machine cible pour chaque opération
-        rang = {op_id: i for i, (op_id, _) in enumerate(sequence)}
-        machine_cible = {op_id: machine_id for op_id, machine_id in sequence}
-
-        while new_sol.available_operations:
-            # Parmi les opérations disponibles, choisir celle de rang minimal
-            op_choisie = min(
-                new_sol.available_operations,
-                key=lambda op: rang.get(op.operation_id, float('inf'))
-            )
-            machine_id = machine_cible.get(op_choisie.operation_id,
-                                            list(op_choisie._machine_options.keys())[0])
-            new_sol.schedule(op_choisie, self._instance.get_machine(machine_id))
-
+        new_sol.apply_sequence(sequence)
         return new_sol
 
 
@@ -125,6 +105,7 @@ class MyNeighborhood1(Neighborhood):
         '''
         sequence      = self._get_schedule_sequence(sol)
         meilleure_sol = sol
+        meilleur_obj  = sol.objective   # figé avant toute reconstruction
 
         for i, (op_id, machine_id_courant) in enumerate(sequence):
             op = self._instance.get_operation(op_id)
@@ -134,8 +115,9 @@ class MyNeighborhood1(Neighborhood):
                 # Nouvelle séquence avec la machine alternative
                 new_sequence = sequence[:i] + [(op_id, machine_id_alt)] + sequence[i+1:]
                 new_sol = self._rebuild_from_sequence(new_sequence)
-                if new_sol.is_feasible and new_sol.objective < meilleure_sol.objective:
+                if new_sol.is_feasible and new_sol.objective < meilleur_obj:
                     meilleure_sol = new_sol
+                    meilleur_obj  = new_sol.objective
 
         return meilleure_sol
 
@@ -176,9 +158,10 @@ class MyNeighborhood2(Neighborhood):
     On ne permute que des opérations de jobs différents (les contraintes
     de précédence intra-job sont immuables).
 
-    Taille du voisinage : au plus O(N²) paires candidates.
-    Le voisinage est polynomial mais pas nécessairement connexe (dépend
-    des contraintes de précédence).
+    Taille du voisinage : O(N) — on n'examine que les N-1 paires d'opérations
+    CONSÉCUTIVES dans la séquence (et non toutes les paires). Le voisinage est
+    donc polynomial mais pas nécessairement connexe (atteindre certaines
+    permutations peut passer par des solutions infaisables).
     '''
 
     def __init__(self, instance: Instance, params: Dict = None):
@@ -196,6 +179,7 @@ class MyNeighborhood2(Neighborhood):
         '''
         sequence      = self._get_schedule_sequence(sol)
         meilleure_sol = sol
+        meilleur_obj  = sol.objective   # figé avant toute reconstruction
 
         for i in range(len(sequence) - 1):
             op_i = self._instance.get_operation(sequence[i][0])
@@ -207,8 +191,9 @@ class MyNeighborhood2(Neighborhood):
                             + [sequence[i+1], sequence[i]]
                             + sequence[i+2:])
             new_sol = self._rebuild_from_sequence(new_sequence)
-            if new_sol.is_feasible and new_sol.objective < meilleure_sol.objective:
+            if new_sol.is_feasible and new_sol.objective < meilleur_obj:
                 meilleure_sol = new_sol
+                meilleur_obj  = new_sol.objective
 
         return meilleure_sol
 

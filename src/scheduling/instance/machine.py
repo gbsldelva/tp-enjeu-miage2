@@ -82,6 +82,11 @@ class Machine(object):
         return self._tear_down_time
 
     @property
+    def end_time(self) -> int:
+        '''Retourne l'échéance de la machine (instant limite d'extinction).'''
+        return self._end_time
+
+    @property
     def scheduled_operations(self) -> List[Operation]:
         '''Retourne la liste de toutes les opérations planifiées sur la machine.'''
         return self._scheduled_operations
@@ -111,9 +116,52 @@ class Machine(object):
         '''
         return self._available_time
 
+    @property
+    def running(self) -> bool:
+        '''Retourne True si une session de la machine est ouverte (allumée).'''
+        return self._running
+
     # ------------------------------------------------------------------
     # Ajout d'une opération (cœur du comportement)
     # ------------------------------------------------------------------
+
+    def _should_interrupt(self, next_start_time: int) -> bool:
+        '''
+        Retourne True si la machine doit être interrompue avant la prochaine
+        opération.
+
+        Une interruption automatique est créée si la plage d'inactivité est
+        suffisante pour effectuer un teardown complet puis un nouveau setup,
+        sans retarder le démarrage de la prochaine opération. Cela évite de
+        garder la machine allumée inutilement pendant les grands trous.
+        '''
+        if not self._running:
+            return False
+        gap = next_start_time - self._available_time
+        if gap < self._tear_down_time + self._set_up_time:
+            return False
+        next_machine_start = max(
+            self._available_time + self._tear_down_time,
+            next_start_time - self._set_up_time
+        )
+        return next_machine_start < self._end_time
+
+    def estimate_start_time(self, start_time: int) -> int:
+        '''
+        Estime l'heure de début effective d'une prochaine opération sans
+        modifier l'état de la machine.
+        '''
+        if self._should_interrupt(start_time):
+            previous_stop = self._available_time + self._tear_down_time
+            machine_start = max(previous_stop, start_time - self._set_up_time)
+            return max(machine_start + self._set_up_time, start_time)
+
+        if not self._running:
+            previous_stop = self._stop_times[-1] if self._stop_times else 0
+            machine_start = max(previous_stop, start_time - self._set_up_time, 0)
+            return max(machine_start + self._set_up_time, start_time)
+
+        return max(start_time, self._available_time)
 
     def add_operation(self, operation: Operation, start_time: int) -> int:
         '''
@@ -125,10 +173,14 @@ class Machine(object):
                             précédences ou d'une contrainte externe)
         @return:            heure de début effective de l'opération
         '''
+        if self._should_interrupt(start_time):
+            self.stop(self._available_time)
+
         if not self._running:
             # Démarrer la machine le plus tard possible (minimise l'idle au
             # début) : le démarrage se termine juste à temps pour start_time.
-            machine_start = max(0, start_time - self._set_up_time)
+            previous_stop = self._stop_times[-1] if self._stop_times else 0
+            machine_start = max(previous_stop, start_time - self._set_up_time, 0)
             actual_start  = machine_start + self._set_up_time
             # Si start_time < set_up_time, la machine démarre en t=0 et
             # l'opération attend la fin du setup.
@@ -156,21 +208,37 @@ class Machine(object):
 
     def stop(self, at_time: int):
         '''
-        Arrête la machine à l'instant at_time (début du teardown).
+        Lance l'arrêt de la machine à l'instant at_time.
         Utile pour la stratégie multi-session (allumer/éteindre pour économiser
         de l'énergie pendant les grandes plages d'inactivité).
         @param at_time: instant où le teardown commence (doit être ≥ à la fin
-                        de la dernière opération planifiée).
+                        de la dernière opération planifiée). L'instant stocké
+                        dans stop_times est l'instant où la machine est
+                        complètement éteinte, donc at_time + tear_down_time.
         '''
         assert self._running, "Impossible d'arrêter une machine déjà éteinte."
         assert at_time >= self._available_time, (
             f"Impossible d'arrêter la machine à t={at_time} : dernière opération "
             f"termine à t={self._available_time}."
         )
-        self._stop_times[-1] = at_time
+        self._stop_times[-1] = at_time + self._tear_down_time
         self._running        = False
         # La prochaine available_time ne change pas : la machine est éteinte,
         # add_operation redémarrera au besoin.
+
+    def close(self):
+        '''
+        Ferme la session courante au plus tôt : le teardown démarre juste après
+        la dernière opération planifiée (à available_time).
+
+        Par défaut, add_operation laisse la machine allumée jusqu'à son échéance
+        (end_time), ce qui maximise l'idle de fin de session. close() supprime
+        cet idle inutile : la machine est au moins allumée en début de planning
+        et éteinte dès la fin de sa dernière opération (cf. énoncé du TP).
+        '''
+        if not self._running:
+            return
+        self.stop(self._available_time)
 
     # ------------------------------------------------------------------
     # Métriques
@@ -192,7 +260,9 @@ class Machine(object):
         '''
         Consommation totale d'énergie sur toutes les sessions.
 
-        Formule par session :
+        Formule par session (conforme au modèle du squelette : le terme
+        d'inactivité est min_consumption × durée_idle, sans conversion
+        d'unité — c'est l'interprétation littérale attendue par les tests) :
           E = setup_energy + teardown_energy
             + min_consumption × durée_idle
             + Σ op.energy
