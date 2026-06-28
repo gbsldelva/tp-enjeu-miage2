@@ -258,13 +258,14 @@ class Machine(object):
     @property
     def total_energy_consumption(self) -> float:
         '''
-        Consommation totale d'énergie sur toutes les sessions.
+        Consommation totale d'énergie sur toutes les sessions (en kWh).
 
-        Formule par session (conforme au modèle du squelette : le terme
-        d'inactivité est min_consumption × durée_idle, sans conversion
-        d'unité — c'est l'interprétation littérale attendue par les tests) :
+        min_consumption est une PUISSANCE (kW) alors que idle_time est une
+        durée en minutes : l'énergie d'inactivité vaut donc
+        min_consumption × durée_idle / 60 (conversion minutes → heures) afin
+        d'être homogène avec les autres termes, déjà exprimés en kWh.
           E = setup_energy + teardown_energy
-            + min_consumption × durée_idle
+            + min_consumption × durée_idle / 60
             + Σ op.energy
         où durée_idle = (stop - start) - setup_time - teardown_time - Σ pt
         '''
@@ -278,7 +279,7 @@ class Machine(object):
             total += (
                 self._set_up_energy
                 + self._tear_down_energy
-                + self._min_consumption * idle_time
+                + self._min_consumption * idle_time / 60   # kW × min → kWh
                 + sum(op.energy for op in session_ops)
             )
         return total

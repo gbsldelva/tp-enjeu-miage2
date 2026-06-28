@@ -308,8 +308,8 @@ class Solution(object):
         toujours classée derrière une solution réalisable (réponse à la
         question 3 du TP : évaluation d'une solution non réalisable).
 
-        L'énergie d'inactivité suit la formule littérale du modèle
-        (min_consumption × durée_idle, cf. Machine.total_energy_consumption) ;
+        L'énergie d'inactivité est homogène en kWh
+        (min_consumption × durée_idle / 60, cf. Machine.total_energy_consumption) ;
         les composantes sont agrégées avec des poids unitaires.
         '''
         w_e    = 1   # poids de la consommation énergétique

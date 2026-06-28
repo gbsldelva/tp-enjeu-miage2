@@ -75,20 +75,21 @@ class TestMachine(unittest.TestCase):
 
     def testTotalEnergyConsumption(self):
         '''
-        Vérifie la consommation totale d'énergie d'une machine.
+        Vérifie la consommation totale d'énergie d'une machine (en kWh).
         Machine 1 avec op0 (pt=12, e=12) et op2 (pt=9, e=10) :
           - setup_energy    = 5
           - teardown_energy = 4
           - Σ op.energy     = 12 + 10 = 22
           - idle_time       = working_time - setup_time - teardown_time - Σ pt
                             = 120 - 20 - 15 - 21 = 64
-          - énergie idle    = 2 × 64 = 128
-          - TOTAL           = 5 + 4 + 22 + 128 = 159
+          - énergie idle    = min_consumption × idle / 60 = 2 × 64 / 60 ≈ 2.13
+          - TOTAL           = 5 + 4 + 22 + 2.13 ≈ 33.13
         '''
         self.m1.add_operation(self.op0, 0)
         self.m1.add_operation(self.op2, 0)
-        self.assertEqual(self.m1.total_energy_consumption, 159,
-                         'consommation énergétique incorrecte pour machine 1')
+        self.assertAlmostEqual(self.m1.total_energy_consumption,
+                               5 + 4 + 22 + 2 * 64 / 60, places=5,
+                               msg='consommation énergétique incorrecte pour machine 1')
 
     def testAvailableTime(self):
         '''
